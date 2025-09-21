@@ -15,6 +15,7 @@ import {
   AlertTriangle,
   TrendingDown,
   Settings,
+  Bot,
 } from "lucide-react";
 import { useAccount, useConnect, useDisconnect } from "wagmi";
 import { usePortfolio } from "../hooks/usePortfolio";
@@ -359,9 +360,17 @@ const Index = () => {
                 your holdings
               </p>
             </div>
-            <Button variant="ghost" size="sm" asChild>
-              <a href="/defi">View All</a>
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="ghost" size="sm" asChild>
+                <a href="/defi">View All</a>
+              </Button>
+              <Button variant="ghost" size="sm" asChild>
+                <a href="/ai" className="flex items-center gap-2">
+                  <Bot className="h-4 w-4" />
+                  AI Analysis
+                </a>
+              </Button>
+            </div>
           </div>
 
           {defiOpportunities && defiOpportunities.length > 0 ? (

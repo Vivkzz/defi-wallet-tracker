@@ -256,6 +256,17 @@ export class DeFiService {
     return descriptions[protocol] || 'DeFi protocol for earning yield on your assets';
   }
 
+  // Get current APY for a protocol and asset
+  async getCurrentApy(protocol: string, asset: string): Promise<number> {
+    if (this.tokenApyMappings[asset] && this.tokenApyMappings[asset][protocol]) {
+      const baseApy = this.tokenApyMappings[asset][protocol];
+      // Add some variation to simulate real-time changes
+      const variation = (Math.random() - 0.5) * 0.2; // ±10% variation
+      return Math.max(0.1, baseApy * (1 + variation));
+    }
+    return 5.0; // Default APY
+  }
+
   // Simulate staking a token
   async stakeToken(protocol: string, asset: string, amount: number, userAddress: string): Promise<StakingPosition> {
     // This would integrate with actual protocol contracts

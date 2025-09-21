@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAccount } from 'wagmi';
-import { ContractApproval, SecurityCheck } from '../services/securityService';
+import { ContractApproval, SecurityCheck, SecurityService } from '../services/securityService';
 
 export interface UseSecurityReturn {
   approvals: ContractApproval[];
@@ -23,6 +23,9 @@ export const useSecurity = (): UseSecurityReturn => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Initialize security service
+  const securityService = new SecurityService();
+
   // Fetch security data from backend
   const fetchSecurityData = useCallback(async () => {
     if (!isConnected || !address) {
@@ -37,44 +40,48 @@ export const useSecurity = (): UseSecurityReturn => {
     setError(null);
 
     try {
-      const response = await fetch(`http://localhost:3001/api/security/${address}`);
-      const data = await response.json();
+      // Use security service to fetch data
+      const [approvalsData, securityChecksData, securityScoreData, recommendationsData] = await Promise.all([
+        securityService.getContractApprovals(address),
+        securityService.runSecurityChecks(address),
+        securityService.getWalletSecurityScore(address),
+        securityService.getSecurityRecommendations(address)
+      ]);
 
-      if (data.success) {
-        setApprovals(data.data.approvals || []);
-        setSecurityChecks(data.data.securityChecks || []);
-        setSecurityScore(data.data.securityScore || 0);
-        setRecommendations(data.data.recommendations || []);
-      } else {
-        throw new Error(data.error || 'Failed to fetch security data');
-      }
+      setApprovals(approvalsData);
+      setSecurityChecks(securityChecksData);
+      setSecurityScore(securityScoreData);
+      setRecommendations(recommendationsData);
     } catch (err) {
       console.error('Error fetching security data:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch security data');
     } finally {
       setLoading(false);
     }
-  }, [isConnected, address]);
+  }, [isConnected, address, securityService]);
 
   // Revoke approval
   const revokeApproval = useCallback(async (approvalId: string) => {
+    if (!address) return;
+    
     try {
-      // In a real implementation, this would send a transaction
-      console.log(`Revoking approval ${approvalId}`);
+      // Use security service to revoke approval
+      const success = await securityService.revokeApproval(address, approvalId);
       
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Remove from local state
-      setApprovals(prev => prev.filter(approval => approval.id !== approvalId));
-      
-      // Refresh security data
-      await fetchSecurityData();
+      if (success) {
+        // Remove from local state
+        setApprovals(prev => prev.filter(approval => approval.id !== approvalId));
+        
+        // Refresh security data
+        await fetchSecurityData();
+      } else {
+        throw new Error('Failed to revoke approval');
+      }
     } catch (err) {
       console.error('Error revoking approval:', err);
       setError(err instanceof Error ? err.message : 'Failed to revoke approval');
     }
-  }, [fetchSecurityData]);
+  }, [address, securityService, fetchSecurityData]);
 
   // Refresh security data
   const refreshSecurityData = useCallback(async () => {

@@ -8,6 +8,7 @@ import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import Security from "./pages/Security";
 import Defi from "./pages/Defi";
+import AI from "./pages/AI";
 
 const queryClient = new QueryClient();
 
@@ -22,6 +23,7 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/security" element={<Security />} />
             <Route path="/defi" element={<Defi />} />
+            <Route path="/ai" element={<AI />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

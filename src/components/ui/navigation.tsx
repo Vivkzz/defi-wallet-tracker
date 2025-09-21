@@ -1,5 +1,13 @@
 import { cn } from "@/lib/utils";
-import { Wallet, TrendingUp, Shield, Zap, Settings, Menu } from "lucide-react";
+import {
+  Wallet,
+  TrendingUp,
+  Shield,
+  Zap,
+  Bot,
+  Settings,
+  Menu,
+} from "lucide-react";
 import { Button } from "./button";
 import { useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
@@ -9,6 +17,7 @@ const navigationItems = [
   { icon: TrendingUp, label: "Analytics", href: "#", active: false },
   { icon: Shield, label: "Security", href: "/security", active: false },
   { icon: Zap, label: "DeFi", href: "/defi", active: false },
+  { icon: Bot, label: "AI Manager", href: "/ai", active: false },
   { icon: Settings, label: "Settings", href: "#", active: false },
 ];
 
@@ -78,10 +87,14 @@ export function Navigation() {
                     "group-hover:scale-110"
                   )}
                 />
-                <span className={cn(
-                  "font-medium",
-                  item.active ? "text-primary" : "group-hover:text-primary"
-                )}>{item.label}</span>
+                <span
+                  className={cn(
+                    "font-medium",
+                    item.active ? "text-primary" : "group-hover:text-primary"
+                  )}
+                >
+                  {item.label}
+                </span>
                 {item.active && (
                   <span className="absolute right-3 w-1.5 h-1.5 rounded-full bg-primary"></span>
                 )}

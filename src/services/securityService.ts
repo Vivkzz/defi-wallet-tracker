@@ -38,6 +38,19 @@ export class SecurityService {
   // Get all contract approvals for a wallet
   async getContractApprovals(walletAddress: string): Promise<ContractApproval[]> {
     try {
+      // Try to fetch from backend API first
+      try {
+        const response = await fetch(`http://localhost:3001/api/security/${walletAddress}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.data.approvals) {
+            return data.data.approvals;
+          }
+        }
+      } catch (apiError) {
+        console.warn('Backend API not available, using local service:', apiError);
+      }
+
       // Try to fetch real approval data from Etherscan API
       const realApprovals = await this.fetchRealApprovals(walletAddress);
       if (realApprovals.length > 0) {
@@ -118,48 +131,103 @@ export class SecurityService {
 
   // Run security checks on a wallet
   async runSecurityChecks(walletAddress: string): Promise<SecurityCheck[]> {
-    // In a real implementation, this would analyze the wallet's transaction history,
-    // check for suspicious contracts, analyze permissions, etc.
-    return this.getMockSecurityChecks(walletAddress);
+    try {
+      // Try to fetch from backend API first
+      try {
+        const response = await fetch(`http://localhost:3001/api/security/${walletAddress}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.data.securityChecks) {
+            return data.data.securityChecks;
+          }
+        }
+      } catch (apiError) {
+        console.warn('Backend API not available, using local service:', apiError);
+      }
+
+      // Fallback to local analysis
+      return this.getMockSecurityChecks(walletAddress);
+    } catch (error) {
+      console.error('Error running security checks:', error);
+      return this.getMockSecurityChecks(walletAddress);
+    }
   }
 
   // Get security score for a wallet (0-100)
   async getWalletSecurityScore(walletAddress: string): Promise<number> {
-    const checks = await this.runSecurityChecks(walletAddress);
-    
-    // Calculate score based on security checks
-    const totalChecks = checks.length;
-    const passedChecks = checks.filter(check => check.status === 'passed').length;
-    const warningChecks = checks.filter(check => check.status === 'warning').length;
-    const failedChecks = checks.filter(check => check.status === 'failed').length;
-    
-    // Weight by severity
-    const highSeverityIssues = checks.filter(check => 
-      check.severity === 'high' && check.status !== 'passed'
-    ).length;
-    
-    const mediumSeverityIssues = checks.filter(check => 
-      check.severity === 'medium' && check.status !== 'passed'
-    ).length;
-    
-    // Calculate score (0-100)
-    let score = 100;
-    score -= highSeverityIssues * 20; // -20 points for each high severity issue
-    score -= mediumSeverityIssues * 10; // -10 points for each medium severity issue
-    score -= failedChecks * 15; // -15 points for each failed check
-    score -= warningChecks * 5; // -5 points for each warning
-    
-    return Math.max(0, Math.min(100, score));
+    try {
+      // Try to fetch from backend API first
+      try {
+        const response = await fetch(`http://localhost:3001/api/security/${walletAddress}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.data.securityScore !== undefined) {
+            return data.data.securityScore;
+          }
+        }
+      } catch (apiError) {
+        console.warn('Backend API not available, using local service:', apiError);
+      }
+
+      // Fallback to local calculation
+      const checks = await this.runSecurityChecks(walletAddress);
+      
+      // Calculate score based on security checks
+      const totalChecks = checks.length;
+      const passedChecks = checks.filter(check => check.status === 'passed').length;
+      const warningChecks = checks.filter(check => check.status === 'warning').length;
+      const failedChecks = checks.filter(check => check.status === 'failed').length;
+      
+      // Weight by severity
+      const highSeverityIssues = checks.filter(check => 
+        check.severity === 'high' && check.status !== 'passed'
+      ).length;
+      
+      const mediumSeverityIssues = checks.filter(check => 
+        check.severity === 'medium' && check.status !== 'passed'
+      ).length;
+      
+      // Calculate score (0-100)
+      let score = 100;
+      score -= highSeverityIssues * 20; // -20 points for each high severity issue
+      score -= mediumSeverityIssues * 10; // -10 points for each medium severity issue
+      score -= failedChecks * 15; // -15 points for each failed check
+      score -= warningChecks * 5; // -5 points for each warning
+      
+      return Math.max(0, Math.min(100, score));
+    } catch (error) {
+      console.error('Error calculating security score:', error);
+      return 50; // Default score if error
+    }
   }
 
   // Get security recommendations for a wallet
   async getSecurityRecommendations(walletAddress: string): Promise<string[]> {
-    const checks = await this.runSecurityChecks(walletAddress);
-    
-    // Get recommendations from failed or warning checks
-    return checks
-      .filter(check => check.status === 'failed' || check.status === 'warning')
-      .map(check => check.recommendation);
+    try {
+      // Try to fetch from backend API first
+      try {
+        const response = await fetch(`http://localhost:3001/api/security/${walletAddress}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.data.recommendations) {
+            return data.data.recommendations;
+          }
+        }
+      } catch (apiError) {
+        console.warn('Backend API not available, using local service:', apiError);
+      }
+
+      // Fallback to local calculation
+      const checks = await this.runSecurityChecks(walletAddress);
+      
+      // Get recommendations from failed or warning checks
+      return checks
+        .filter(check => check.status === 'failed' || check.status === 'warning')
+        .map(check => check.recommendation);
+    } catch (error) {
+      console.error('Error getting security recommendations:', error);
+      return ['Unable to load security recommendations'];
+    }
   }
 
   // Mock data for contract approvals

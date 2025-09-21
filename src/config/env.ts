@@ -6,6 +6,7 @@ export const config = {
   coingeckoApiKey: import.meta.env.VITE_COINGECKO_API_KEY || "",
   moralisApiKey: import.meta.env.VITE_MORALIS_API_KEY || "",
   alchemyApiKey: import.meta.env.VITE_ALCHEMY_API_KEY || "",
+  geminiApiKey: import.meta.env.VITE_GEMINI_API_KEY || "AIzaSyCyCPLyMutki02wC98bxA-OIOS50pVVuxE",
 
   // Supported Chains (Focused on Ethereum and BSC)
   supportedChains: [
