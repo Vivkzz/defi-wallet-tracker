@@ -35,6 +35,72 @@ export class AIService {
     this.apiKey = config.geminiApiKey;
   }
 
+  // Parse a natural-language transfer intent like "send 1 ETH to 0xabc..."
+  async parseTransferIntent(text: string): Promise<{
+    action?: 'send' | 'burn' | 'swap';
+    amount?: number;
+    token?: string;
+    recipient?: string;
+    chainHint?: string;
+    toToken?: string;
+  }> {
+    // Lightweight local regex first (works offline)
+    const local = this.parseTransferIntentLocally(text);
+    if (!this.isConfigured()) return local;
+
+    try {
+      const prompt = `Extract a crypto action intent from the user's message and return ONLY JSON (no prose, no fences).
+Message: "${text}"
+Schema: {"action": "send|burn|swap", "amount": number, "token": string, "toToken": string, "recipient": string, "chainHint": string}
+Token fields are symbols (e.g., ETH). Recipient must be an 0x-address if present.`;
+      const response = await this.callGeminiAPI(prompt);
+      const jsonText = this.extractJsonBlock(response);
+      const parsed = JSON.parse(jsonText);
+      return {
+        action: typeof parsed.action === 'string' ? parsed.action : local.action,
+        amount: typeof parsed.amount === 'number' ? parsed.amount : local.amount,
+        token: typeof parsed.token === 'string' ? parsed.token : local.token,
+        recipient: typeof parsed.recipient === 'string' ? parsed.recipient : local.recipient,
+        chainHint: typeof parsed.chainHint === 'string' ? parsed.chainHint : local.chainHint,
+        toToken: typeof parsed.toToken === 'string' ? parsed.toToken : local.toToken,
+      };
+    } catch {
+      return local;
+    }
+  }
+
+  private parseTransferIntentLocally(text: string): { action?: 'send' | 'burn' | 'swap'; amount?: number; token?: string; recipient?: string; chainHint?: string; toToken?: string } {
+    const result: { action?: 'send' | 'burn' | 'swap'; amount?: number; token?: string; recipient?: string; chainHint?: string; toToken?: string } = {};
+    const lower = text.toLowerCase();
+    if (/(^|\b)(send|transfer)\b/.test(lower)) result.action = 'send';
+    if (/(^|\b)burn\b/.test(lower)) result.action = 'burn';
+    if (/(^|\b)swap\b/.test(lower)) result.action = 'swap';
+    // Amount and token (supports decimals)
+    const amountTokenMatch = text.match(/\b(\d+(?:\.\d+)?)\s*([a-zA-Z]{2,10})\b/);
+    if (amountTokenMatch) {
+      result.amount = parseFloat(amountTokenMatch[1]);
+      result.token = amountTokenMatch[2].toUpperCase();
+    }
+    // Recipient address (0x...40 hex chars)
+    const addrMatch = text.match(/0x[a-fA-F0-9]{40}/);
+    if (addrMatch) {
+      result.recipient = addrMatch[0];
+    }
+    // Swap pair: "swap 1 eth to usdc"
+    const swapToMatch = lower.match(/\bto\s+([a-z0-9]{2,10})\b/);
+    if (swapToMatch) {
+      result.toToken = swapToMatch[1].toUpperCase();
+    }
+    // Chain hint
+    if (lower.includes('sepolia')) result.chainHint = 'sepolia';
+    if (lower.includes('mainnet')) result.chainHint = 'mainnet';
+    if (lower.includes('polygon') || lower.includes('matic')) result.chainHint = 'polygon';
+    if (lower.includes('arbitrum')) result.chainHint = 'arbitrum';
+    if (lower.includes('optimism')) result.chainHint = 'optimism';
+    if (lower.includes('bsc') || lower.includes('binance')) result.chainHint = 'bsc';
+    return result;
+  }
+
   // Check if API key is available
   isConfigured(): boolean {
     return !!this.apiKey;
@@ -159,6 +225,8 @@ Please provide:
 5. Market outlook and trends to watch
 6. Specific insights about token allocation and diversification
 
+Answer in Short and ask if they need in detail analysis than give in detail analysis also dont ask much question give long and short term analysis.
+
 Format your response as JSON with the following structure:
 {
   "summary": "Brief portfolio summary",
@@ -201,7 +269,7 @@ ${recentHistory}
 User's Question: ${message}
 
 Please provide a helpful, specific response about their portfolio. If they're asking for advice, be practical and actionable. If they're asking about specific tokens or strategies, provide detailed explanations. Always consider their current holdings and risk profile.
-
+ask less question and give long and short term analysis. answer in short and ask if they need in detail analysis than give in detail analysis.
 Respond in a conversational but professional tone. If you need more information to give a good answer, ask clarifying questions.`;
   }
 
@@ -238,7 +306,8 @@ Format as JSON:
   // Parse portfolio analysis response
   private parsePortfolioAnalysis(response: string): AIPortfolioAnalysis {
     try {
-      const parsed = JSON.parse(response);
+      const jsonText = this.extractJsonBlock(response);
+      const parsed = JSON.parse(jsonText);
       return {
         summary: parsed.summary || 'Portfolio analysis completed',
         riskAssessment: parsed.riskAssessment || 'Risk assessment not available',
@@ -270,7 +339,8 @@ Format as JSON:
     riskLevel: 'low' | 'medium' | 'high';
   } {
     try {
-      const parsed = JSON.parse(response);
+      const jsonText = this.extractJsonBlock(response);
+      const parsed = JSON.parse(jsonText);
       return {
         recommendations: parsed.recommendations || [],
         reasoning: parsed.reasoning || 'No reasoning provided',
@@ -284,6 +354,27 @@ Format as JSON:
         riskLevel: 'medium'
       };
     }
+  }
+
+  // Extract a JSON block from AI text, stripping markdown fences/backticks
+  private extractJsonBlock(text: string): string {
+    if (!text) return '{}';
+    // If fenced code block ```json ... ``` exists
+    const fenced = text.match(/```[\s\S]*?```/);
+    if (fenced && fenced[0]) {
+      return fenced[0]
+        .replace(/```json/i, '')
+        .replace(/```/g, '')
+        .trim();
+    }
+    // Try to find the first { ... } JSON object
+    const firstBrace = text.indexOf('{');
+    const lastBrace = text.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      const candidate = text.substring(firstBrace, lastBrace + 1).trim();
+      return candidate;
+    }
+    return text.trim();
   }
 
   // Mock analysis for when API is not available

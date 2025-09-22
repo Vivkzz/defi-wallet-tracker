@@ -9,6 +9,7 @@ import NotFound from "./pages/NotFound";
 import Security from "./pages/Security";
 import Defi from "./pages/Defi";
 import AI from "./pages/AI";
+import QuickSend from "./pages/QuickSend";
 
 const queryClient = new QueryClient();
 
@@ -24,6 +25,7 @@ const App = () => (
             <Route path="/security" element={<Security />} />
             <Route path="/defi" element={<Defi />} />
             <Route path="/ai" element={<AI />} />
+            <Route path="/quick-send" element={<QuickSend />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

@@ -7,6 +7,7 @@ import {
   Bot,
   Settings,
   Menu,
+  Send,
 } from "lucide-react";
 import { Button } from "./button";
 import { useState, useEffect } from "react";
@@ -14,11 +15,12 @@ import { useLocation } from "react-router-dom";
 
 const navigationItems = [
   { icon: Wallet, label: "Portfolio", href: "/", active: false },
-  { icon: TrendingUp, label: "Analytics", href: "#", active: false },
+  // { icon: TrendingUp, label: "Analytics", href: "#", active: false },
   { icon: Shield, label: "Security", href: "/security", active: false },
   { icon: Zap, label: "DeFi", href: "/defi", active: false },
   { icon: Bot, label: "AI Manager", href: "/ai", active: false },
-  { icon: Settings, label: "Settings", href: "#", active: false },
+  { icon: Send, label: "Quick Send", href: "/quick-send", active: false },
+  // { icon: Settings, label: "Settings", href: "#", active: false },
 ];
 
 export function Navigation() {

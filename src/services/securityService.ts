@@ -38,7 +38,7 @@ export class SecurityService {
   // Get all contract approvals for a wallet
   async getContractApprovals(walletAddress: string): Promise<ContractApproval[]> {
     try {
-      // Try to fetch from backend API first
+      // Prefer backend API to avoid browser RPC CORS issues
       try {
         const response = await fetch(`http://localhost:3001/api/security/${walletAddress}`);
         if (response.ok) {
@@ -51,36 +51,11 @@ export class SecurityService {
         console.warn('Backend API not available, using local service:', apiError);
       }
 
-      // Try to fetch real approval data from Etherscan API
-      const realApprovals = await this.fetchRealApprovals(walletAddress);
-      if (realApprovals.length > 0) {
-        return realApprovals;
-      }
-      
-      // Fallback to mock data if real data unavailable
+      // Fallback to mock data if backend unavailable
       return this.getMockContractApprovals(walletAddress);
     } catch (error) {
       console.error('Error fetching contract approvals:', error);
       return this.getMockContractApprovals(walletAddress);
-    }
-  }
-
-  // Fetch real approval data from Etherscan API
-  private async fetchRealApprovals(walletAddress: string): Promise<ContractApproval[]> {
-    try {
-      // This would use Etherscan API to get token approvals
-      // For now, return enhanced mock data that simulates real approvals
-      const mockApprovals = this.getMockContractApprovals(walletAddress);
-      
-      // Add some randomization to make it feel more real
-      return mockApprovals.map(approval => ({
-        ...approval,
-        lastUpdated: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString(),
-        riskLevel: this.analyzeApprovalRisk(approval)
-      }));
-    } catch (error) {
-      console.error('Error fetching real approvals:', error);
-      return [];
     }
   }
 

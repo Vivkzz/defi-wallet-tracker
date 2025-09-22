@@ -46,11 +46,23 @@ export const useAI = (
   
   // Services
   const aiService = useRef(new AIService()).current;
+  const isSendingRef = useRef(false);
+  const lastUserMessageRef = useRef<{ content: string; ts: number } | null>(null);
   const isConfigured = aiService.isConfigured();
 
   // Send message to AI
   const sendMessage = useCallback(async (message: string) => {
     if (!message.trim() || !portfolio) return;
+
+    // Deduplicate rapid duplicates (e.g., double click/enter)
+    const now = Date.now();
+    if (lastUserMessageRef.current &&
+        lastUserMessageRef.current.content === message.trim() &&
+        (now - lastUserMessageRef.current.ts) < 1000) {
+      return;
+    }
+    if (isSendingRef.current) return;
+    isSendingRef.current = true;
 
     setIsLoading(true);
     setError(null);
@@ -63,10 +75,15 @@ export const useAI = (
       timestamp: new Date().toISOString()
     };
 
-    setMessages(prev => [...prev, userMessage]);
+    let updatedHistory: AIMessage[] = [];
+    setMessages(prev => {
+      updatedHistory = [...prev, userMessage];
+      return updatedHistory;
+    });
+    lastUserMessageRef.current = { content: message.trim(), ts: now };
 
     try {
-      const aiResponse = await aiService.chatWithAI(message, portfolio, messages);
+      const aiResponse = await aiService.chatWithAI(message, portfolio, updatedHistory);
       setMessages(prev => [...prev, aiResponse]);
     } catch (err) {
       console.error('Error sending message to AI:', err);
@@ -82,8 +99,9 @@ export const useAI = (
       setMessages(prev => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
+      isSendingRef.current = false;
     }
-  }, [portfolio, messages, aiService]);
+  }, [portfolio, aiService]);
 
   // Analyze portfolio with AI
   const analyzePortfolio = useCallback(async () => {

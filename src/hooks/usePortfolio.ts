@@ -86,17 +86,22 @@ export const usePortfolio = (): UsePortfolioReturn => {
         const data = await response.json();
         
         if (data.success) {
-          setPortfolio(data.data);
+          // If backend returns empty (e.g., Covalent quota), fallback to local aggregation
+          const basePortfolio = (data.data && data.data.tokens && data.data.tokens.length > 0)
+            ? data.data
+            : await portfolioService.getAggregatedPortfolio(address);
+
+          setPortfolio(basePortfolio);
           setLastUpdated(new Date().toISOString());
           
           // Generate analytics
-          const portfolioAnalytics = riskAnalysisService.generatePortfolioAnalytics(data.data);
+          const portfolioAnalytics = riskAnalysisService.generatePortfolioAnalytics(basePortfolio);
           setAnalytics(portfolioAnalytics);
 
           // Generate chart data
           const performanceData = await portfolioService.getPortfolioHistory(address, 30);
-          const assetAllocationData = portfolioService.generateAssetAllocationData(data.data.tokens);
-          const riskDistributionData = portfolioService.generateRiskDistributionData(data.data.tokens);
+          const assetAllocationData = portfolioService.generateAssetAllocationData(basePortfolio.tokens);
+          const riskDistributionData = portfolioService.generateRiskDistributionData(basePortfolio.tokens);
           
           setChartData({
             performance: performanceData,
@@ -118,9 +123,9 @@ export const usePortfolio = (): UsePortfolioReturn => {
 
           // Generate alerts based on portfolio changes
           if (previousPortfolioRef.current) {
-            notificationService.generatePortfolioAlerts(data.data, previousPortfolioRef.current);
+            notificationService.generatePortfolioAlerts(basePortfolio, previousPortfolioRef.current);
           }
-          previousPortfolioRef.current = data.data;
+          previousPortfolioRef.current = basePortfolio;
           
           return;
         }

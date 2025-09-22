@@ -13,7 +13,10 @@ const PORT = process.env.PORT || 3001;
 // Middleware
 app.use(helmet());
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin: [
+    process.env.FRONTEND_URL || 'http://localhost:5173',
+    'http://localhost:8080'
+  ],
   credentials: true
 }));
 app.use(express.json());
@@ -49,6 +52,21 @@ app.get('/api/portfolio/:address', async (req, res) => {
     const data = await response.json();
 
     if (data.error) {
+      // Graceful fallback if Covalent quota exceeded
+      if ((data.error_message || '').toLowerCase().includes('credit limit exceeded')) {
+        return res.json({
+          success: true,
+          data: {
+            address,
+            chain: chainId,
+            tokens: [],
+            totalValue: 0,
+            change24h: 0,
+            change24hPercent: 0,
+            lastUpdated: new Date().toISOString()
+          }
+        });
+      }
       throw new Error(data.error_message);
     }
 
@@ -118,6 +136,50 @@ app.get('/api/tokens/:symbol/price', async (req, res) => {
       success: false,
       error: error.message
     });
+  }
+});
+
+// Batch token prices endpoint (server-side CoinGecko proxy)
+app.post('/api/tokens/prices', async (req, res) => {
+  try {
+    const { symbols } = req.body || {};
+    if (!Array.isArray(symbols) || symbols.length === 0) {
+      return res.status(400).json({ success: false, error: 'symbols array is required' });
+    }
+
+    // Map common symbols to CoinGecko IDs
+    const symbolToId = {
+      ETH: 'ethereum', WETH: 'weth', BTC: 'bitcoin', WBTC: 'wrapped-bitcoin',
+      USDC: 'usd-coin', USDT: 'tether', DAI: 'dai', BUSD: 'binance-usd',
+      BNB: 'binancecoin', MATIC: 'matic-network', AVAX: 'avalanche-2', SOL: 'solana',
+      LINK: 'chainlink', UNI: 'uniswap', AAVE: 'aave', COMP: 'compound-governance-token',
+      CRV: 'curve-dao-token', CAKE: 'pancakeswap-token', SFUND: 'seedify-fund', ALU: 'altura',
+      BETH: 'binance-eth'
+    };
+
+    const ids = symbols
+      .map(s => symbolToId[(s || '').toUpperCase()] || (s || '').toLowerCase())
+      .join(',');
+
+    const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true`;
+    const response = await fetch(url);
+    if (!response.ok) {
+      return res.status(response.status).json({ success: false, error: `CoinGecko HTTP ${response.status}` });
+    }
+    const data = await response.json();
+
+    // Reverse-map ids back to symbols
+    const idToSymbol = Object.fromEntries(Object.entries(symbolToId).map(([k, v]) => [v, k]));
+    const prices = {};
+    Object.keys(data).forEach(id => {
+      const symbol = idToSymbol[id] || id.toUpperCase();
+      prices[symbol] = data[id]?.usd || 0;
+    });
+
+    return res.json({ success: true, data: prices });
+  } catch (error) {
+    console.error('Batch price API error:', error);
+    return res.status(500).json({ success: false, error: 'Failed to fetch prices' });
   }
 });
 
@@ -260,83 +322,84 @@ app.get('/api/risk/portfolio/:address', async (req, res) => {
   }
 });
 
-// Security endpoint
+// Security endpoint (live on-chain allowances on Ethereum mainnet via public RPC)
 app.get('/api/security/:address', async (req, res) => {
   try {
     const { address } = req.params;
-    
-    // Mock security data with some randomization
-    const approvals = [
-      {
-        id: 'approval-1',
-        contractAddress: '0x7a250d5630b4cf539739df2c5dacb4c659f2488d',
-        contractName: 'Uniswap V2 Router',
-        spenderAddress: '0x7a250d5630b4cf539739df2c5dacb4c659f2488d',
-        spenderName: 'Uniswap V2: Router',
-        tokenAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
-        tokenName: 'Wrapped Ether',
-        tokenSymbol: 'WETH',
-        allowance: '115792089237316195423570985008687907853269984665640564039457584007913129639935',
-        unlimited: true,
-        lastUpdated: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString(),
-        chain: 'Ethereum',
-        riskLevel: 'low'
-      },
-      {
-        id: 'approval-2',
-        contractAddress: '0x68b3465833fb72a70ecdf485e0e4c7bd8665fc45',
-        contractName: 'Uniswap V3 Router',
-        spenderAddress: '0x68b3465833fb72a70ecdf485e0e4c7bd8665fc45',
-        spenderName: 'Uniswap V3: Router',
-        tokenAddress: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
-        tokenName: 'USD Coin',
-        tokenSymbol: 'USDC',
-        allowance: '115792089237316195423570985008687907853269984665640564039457584007913129639935',
-        unlimited: true,
-        lastUpdated: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString(),
-        chain: 'Ethereum',
-        riskLevel: 'low'
-      }
+    if (!/^0x[a-fA-F0-9]{40}$/.test(address)) {
+      return res.status(400).json({ success: false, error: 'Invalid address' });
+    }
+
+    const { createPublicClient, http, formatUnits, maxUint256 } = require('viem');
+    const { mainnet } = require('viem/chains');
+
+    const TOKENS = [
+      { address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', symbol: 'USDC', name: 'USD Coin', decimals: 6 },
+      { address: '0xdAC17F958D2ee523a2206206994597C13D831ec7', symbol: 'USDT', name: 'Tether USD', decimals: 6 },
+      { address: '0xC02aaA39b223FE8D0A0E5C4F27eAD9083C756Cc2', symbol: 'WETH', name: 'Wrapped Ether', decimals: 18 },
+      { address: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599', symbol: 'WBTC', name: 'Wrapped BTC', decimals: 8 },
+      { address: '0x6B175474E89094C44Da98b954EedeAC495271d0F', symbol: 'DAI', name: 'Dai Stablecoin', decimals: 18 },
     ];
-    
-    const securityChecks = [
-      {
-        id: 'check-1',
-        name: 'Unlimited Token Approvals',
-        description: 'Checks for unlimited token approvals that could pose a security risk',
-        status: Math.random() > 0.5 ? 'warning' : 'passed',
-        severity: 'high',
-        recommendation: 'Revoke unlimited approvals and set specific allowance amounts instead'
-      },
-      {
-        id: 'check-2',
-        name: 'Suspicious Contract Interactions',
-        description: 'Checks for interactions with known suspicious or malicious contracts',
-        status: 'passed',
-        severity: 'high',
-        recommendation: 'Revoke approvals for suspicious contracts and avoid interacting with them'
-      },
-      {
-        id: 'check-3',
-        name: 'Hardware Wallet Usage',
-        description: 'Checks if a hardware wallet is being used for added security',
-        status: Math.random() > 0.3 ? 'failed' : 'passed',
-        severity: 'medium',
-        recommendation: 'Consider using a hardware wallet for improved security'
-      }
+    const SPENDERS = [
+      { address: '0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D', name: 'Uniswap V2: Router' },
+      { address: '0xE592427A0AEce92De3Edee1F18E0157C05861564', name: 'Uniswap V3: Router' },
+      { address: '0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45', name: 'Uniswap V3: Router 2' },
+      { address: '0x11111112542d85B3EF69AE05771c2dCCff4fAa26', name: '1inch: Router' },
+      { address: '0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F', name: 'SushiSwap: Router' },
     ];
-    
-    const securityScore = Math.floor(Math.random() * 40) + 60; // 60-100
-    
-    res.json({
+
+    const ERC20_ABI = [
+      { name: 'allowance', type: 'function', stateMutability: 'view', inputs: [
+        { name: 'owner', type: 'address' }, { name: 'spender', type: 'address' }
+      ], outputs: [{ name: '', type: 'uint256' }] }
+    ];
+
+    const client = createPublicClient({ chain: mainnet, transport: http() });
+    const owner = address;
+    const approvals = [];
+
+    for (const token of TOKENS) {
+      for (const spender of SPENDERS) {
+        try {
+          const allowance = await client.readContract({
+            abi: ERC20_ABI,
+            address: token.address,
+            functionName: 'allowance',
+            args: [owner, spender.address],
+          });
+          const allowanceBig = BigInt(allowance.toString());
+          if (allowanceBig === 0n) continue;
+          const formatted = formatUnits(allowanceBig, token.decimals);
+          const isUnlimited = allowanceBig >= maxUint256 / 2n;
+          approvals.push({
+            id: `${token.symbol}-${spender.address}`,
+            contractAddress: spender.address,
+            contractName: spender.name,
+            spenderAddress: spender.address,
+            spenderName: spender.name,
+            tokenAddress: token.address,
+            tokenName: token.name,
+            tokenSymbol: token.symbol,
+            allowance: formatted,
+            unlimited: isUnlimited,
+            lastUpdated: new Date().toISOString(),
+            chain: 'Ethereum',
+            riskLevel: 'low',
+          });
+        } catch {}
+      }
+    }
+
+    const securityChecks = [];
+    const securityScore = 100 - approvals.filter(a => a.unlimited).length * 10;
+
+    return res.json({
       success: true,
       data: {
         approvals,
         securityChecks,
-        securityScore,
-        recommendations: securityChecks
-          .filter(check => check.status !== 'passed')
-          .map(check => check.recommendation)
+        securityScore: Math.max(0, securityScore),
+        recommendations: approvals.filter(a => a.unlimited).map(() => 'Revoke unlimited approvals and set specific allowance amounts instead')
       }
     });
   } catch (error) {
