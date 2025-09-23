@@ -459,10 +459,10 @@ function OpportunityCard({
           <Zap className="h-4 w-4 mr-2" />
           {canStake ? "Stake Now" : "Insufficient Balance"}
         </Button>
-        <Button variant="outline" className="w-full">
+        {/* <Button variant="outline" className="w-full">
           <ExternalLink className="h-4 w-4 mr-2" />
           Learn More
-        </Button>
+        </Button> */}
       </div>
     </div>
   );

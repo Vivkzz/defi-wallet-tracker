@@ -160,7 +160,10 @@ const Index = () => {
                 Disconnect
               </Button>
             ) : (
-              <Dialog open={walletDialogOpen} onOpenChange={setWalletDialogOpen}>
+              <Dialog
+                open={walletDialogOpen}
+                onOpenChange={setWalletDialogOpen}
+              >
                 <DialogTrigger asChild>
                   <Button variant="accent" size="sm">
                     <Wallet className="h-4 w-4 mr-2" />
