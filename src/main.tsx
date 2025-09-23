@@ -2,6 +2,7 @@ import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
 import { WagmiConfig, createConfig, http } from "wagmi";
+import { metaMask } from "wagmi/connectors";
 import {
   mainnet,
   sepolia,
@@ -14,6 +15,15 @@ import {
 
 const config = createConfig({
   chains: [mainnet, sepolia, polygon, arbitrum, optimism, bsc, polygonMumbai],
+  connectors: [
+    metaMask({
+      dappMetadata: {
+        name: "Omni Folio Guard",
+        url: "https://omni-folio-guard.com",
+        iconUrl: "https://omni-folio-guard.com/icon.png",
+      },
+    }),
+  ],
   transports: {
     // Prefer publicnode endpoints that allow browser CORS
     [mainnet.id]: http("https://ethereum.publicnode.com"),

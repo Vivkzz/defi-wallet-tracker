@@ -119,7 +119,7 @@ export class SettingsService {
         opportunityAlerts: true,
       },
       privacy: {
-        hideSmallBalances: true,
+        hideSmallBalances: false,
         hideZeroBalances: true,
         minBalanceThreshold: 5,
       },

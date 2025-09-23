@@ -18,6 +18,22 @@ import {
   Bot,
 } from "lucide-react";
 import { useAccount, useConnect, useDisconnect } from "wagmi";
+import { useMemo, useState } from "react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { usePortfolio } from "../hooks/usePortfolio";
 
 const Index = () => {
@@ -42,6 +58,44 @@ const Index = () => {
     settings,
     updateSettings,
   } = usePortfolio();
+
+  // Local UI state for sorting and wallet dialog
+  const [sortOption, setSortOption] = useState<string>("value_desc");
+  const [walletDialogOpen, setWalletDialogOpen] = useState(false);
+
+  // Derived list: apply $5 filter (when enabled) and selected sort
+  const visibleTokens = useMemo(() => {
+    const tokens = portfolio?.tokens ?? [];
+
+    const filtered = settings?.privacy?.hideSmallBalances
+      ? tokens.filter((t) => (t.value || 0) >= 5)
+      : tokens;
+
+    const sorted = [...filtered];
+    switch (sortOption) {
+      case "value_asc":
+        sorted.sort((a, b) => (a.value || 0) - (b.value || 0));
+        break;
+      case "value_desc":
+        sorted.sort((a, b) => (b.value || 0) - (a.value || 0));
+        break;
+      case "name_asc":
+        sorted.sort((a, b) => a.name.localeCompare(b.name));
+        break;
+      case "name_desc":
+        sorted.sort((a, b) => b.name.localeCompare(a.name));
+        break;
+      case "change_asc":
+        sorted.sort((a, b) => (a.change24h || 0) - (b.change24h || 0));
+        break;
+      case "change_desc":
+        sorted.sort((a, b) => (b.change24h || 0) - (a.change24h || 0));
+        break;
+      default:
+        break;
+    }
+    return sorted;
+  }, [portfolio?.tokens, settings?.privacy?.hideSmallBalances, sortOption]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -106,17 +160,43 @@ const Index = () => {
                 Disconnect
               </Button>
             ) : (
-              connectors.map((connector) => (
-                <Button
-                  variant="accent"
-                  size="sm"
-                  key={connector.id}
-                  onClick={() => connect({ connector })}
-                >
-                  <Plus className="h-4 w-4" />
-                  Connect {connector.name}
-                </Button>
-              ))
+              <Dialog open={walletDialogOpen} onOpenChange={setWalletDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="accent" size="sm">
+                    <Wallet className="h-4 w-4 mr-2" />
+                    Connect Wallet
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Connect Wallet</DialogTitle>
+                    <DialogDescription>
+                      Choose a wallet to connect to your account
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="grid gap-3 py-4">
+                    {connectors.map((connector) => (
+                      <Button
+                        key={connector.id}
+                        variant="outline"
+                        className="justify-start h-12"
+                        onClick={() => {
+                          connect({ connector });
+                          setWalletDialogOpen(false);
+                        }}
+                      >
+                        <Wallet className="h-5 w-5 mr-3" />
+                        <div className="text-left">
+                          <div className="font-medium">{connector.name}</div>
+                          <div className="text-xs text-muted-foreground">
+                            Connect using {connector.name}
+                          </div>
+                        </div>
+                      </Button>
+                    ))}
+                  </div>
+                </DialogContent>
+              </Dialog>
             )}
           </div>
         </div>
@@ -326,15 +406,39 @@ const Index = () => {
         {/* Token Holdings */}
         {portfolio && portfolio.tokens && portfolio.tokens.length > 0 ? (
           <div>
-            {settings.privacy.hideSmallBalances && (
-              <div className="mb-4 p-3 rounded-lg bg-muted/30 border border-border-soft">
-                <p className="text-sm text-muted-foreground">
-                  <span className="font-medium">Filter Active:</span> Hiding
-                  tokens with value below $5 to reduce spam tokens.
-                </p>
+            <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              {settings.privacy.hideSmallBalances && (
+                <div className="p-3 rounded-lg bg-muted/30 border border-border-soft">
+                  <p className="text-sm text-muted-foreground">
+                    <span className="font-medium">Filter Active:</span> Showing
+                    only assets with value ≥ $5.
+                  </p>
+                </div>
+              )}
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">Sort</span>
+                <Select value={sortOption} onValueChange={setSortOption}>
+                  <SelectTrigger className="w-52 h-9">
+                    <SelectValue placeholder="Sort by" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="value_desc">
+                      Value: High → Low
+                    </SelectItem>
+                    <SelectItem value="value_asc">Value: Low → High</SelectItem>
+                    <SelectItem value="name_asc">Name: A → Z</SelectItem>
+                    <SelectItem value="name_desc">Name: Z → A</SelectItem>
+                    <SelectItem value="change_desc">
+                      24h Change: High → Low
+                    </SelectItem>
+                    <SelectItem value="change_asc">
+                      24h Change: Low → High
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-            )}
-            <TokenList tokens={portfolio.tokens} />
+            </div>
+            <TokenList tokens={visibleTokens} />
           </div>
         ) : (
           <div className="glass-card rounded-xl p-6">

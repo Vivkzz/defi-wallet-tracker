@@ -39,7 +39,7 @@ export class PortfolioService {
       }
 
       const rawTokens = (data.data.items || [])
-        .filter((item: any) => item.quote && item.quote >= 1); // Filter for tokens with value >= $1
+        .filter((item: any) => item.balance && parseFloat(item.balance) > 0); // Filter for tokens with positive balance
 
       // Get real-time price data for better accuracy
       const tokenSymbols = rawTokens.map((item: any) => item.contract_ticker_symbol).filter(Boolean);
