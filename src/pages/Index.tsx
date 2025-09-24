@@ -129,7 +129,7 @@ const Index = () => {
             {/* Settings Toggle */}
             <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-muted/30">
               <Settings className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm text-muted-foreground">Hide &lt;$5</span>
+              <span className="text-sm text-muted-foreground">Magic Filter</span>
               <Button
                 variant="ghost"
                 size="sm"
