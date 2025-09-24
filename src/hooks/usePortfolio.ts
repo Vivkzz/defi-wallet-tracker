@@ -30,6 +30,7 @@ export interface UsePortfolioReturn {
   clearError: () => void;
   markAlertAsRead: (alertId: string) => void;
   markAllAlertsAsRead: () => void;
+  removeAlert: (alertId: string) => void;
   
   // Settings
   settings: any;
@@ -185,14 +186,19 @@ export const usePortfolio = (): UsePortfolioReturn => {
     setError(null);
   }, []);
 
-  // Mark alert as read
+  // Mark alert as read (and remove it from the frontend)
   const markAlertAsRead = useCallback((alertId: string) => {
-    notificationService.markAsRead(alertId);
+    notificationService.removeAlert(alertId);
   }, [notificationService]);
 
-  // Mark all alerts as read
+  // Mark all alerts as read (and remove them from the frontend)
   const markAllAlertsAsRead = useCallback(() => {
-    notificationService.markAllAsRead();
+    notificationService.clearAllAlerts();
+  }, [notificationService]);
+
+  // Remove alert
+  const removeAlert = useCallback((alertId: string) => {
+    notificationService.removeAlert(alertId);
   }, [notificationService]);
 
   // Update settings
@@ -265,6 +271,7 @@ export const usePortfolio = (): UsePortfolioReturn => {
     clearError,
     markAlertAsRead,
     markAllAlertsAsRead,
+    removeAlert,
     
     // Settings
     settings,
